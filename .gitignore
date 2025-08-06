@@ -1,0 +1,336 @@
+# =============================================================================
+# NVIDIA GPU Data Center Instance Setup - Git Ignore File
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Portainer Data & Secrets
+# -----------------------------------------------------------------------------
+portainer/data/
+portainer/admin_password.txt
+portainer/portainer_password
+portainer/.env
+
+
+# -----------------------------------------------------------------------------
+# System & Log Files
+# -----------------------------------------------------------------------------
+*.log
+*.log.*
+*.out
+*.err
+/var/log/
+/tmp/
+/temp/
+
+# Setup artifacts
+setup-*.log
+install-*.log
+verification-*.log
+
+# -----------------------------------------------------------------------------
+# Docker & Container Files
+# -----------------------------------------------------------------------------
+.docker/
+docker-compose.override.yml
+.dockerignore
+
+# Docker volumes and data
+volumes/
+data/
+persistent-data/
+
+# Container logs
+container-logs/
+logs/
+
+# -----------------------------------------------------------------------------
+# NVIDIA & CUDA Related
+# -----------------------------------------------------------------------------
+# CUDA installer files
+cuda_*.run
+nvidia-*.run
+*.deb.downloaded
+
+# NVIDIA logs
+nvidia-installer.log
+nvidia-uninstall.log
+cuda-installer.log
+
+# Driver backup
+nvidia-drivers-backup/
+
+# -----------------------------------------------------------------------------
+# SSH & Security Files
+# -----------------------------------------------------------------------------
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+id_rsa*
+id_ecdsa*
+id_ed25519*
+known_hosts
+authorized_keys
+
+# SSL certificates
+ssl/
+certs/
+certificates/
+
+# Password files
+*password*.txt
+*passwd*.txt
+*.secret
+.secrets/
+
+# -----------------------------------------------------------------------------
+# System Configuration Backups
+# -----------------------------------------------------------------------------
+*.bak
+*.backup
+*.orig
+*~
+.#*
+#*#
+
+# Configuration backups
+config-backup-*/
+backup-*/
+*.conf.backup
+*.cfg.backup
+
+# -----------------------------------------------------------------------------
+# Temporary & Cache Files
+# -----------------------------------------------------------------------------
+.cache/
+.tmp/
+cache/
+tmp/
+
+# Script temporary files
+temp-*
+tmp-*
+*.tmp
+
+# Download cache
+downloads/
+.downloads/
+
+# Package manager caches
+.apt-cache/
+.nala-cache/
+.pip-cache/
+
+# -----------------------------------------------------------------------------
+# Development & Editor Files
+# -----------------------------------------------------------------------------
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Vim
+.vimrc.local
+.vim/
+*.swp
+*.swo
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Nano backup files
+*.save
+
+# Helix editor
+.helix/
+
+# -----------------------------------------------------------------------------
+# Node.js & Python (if using additional scripts)
+# -----------------------------------------------------------------------------
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.node_repl_history
+*.tgz
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# -----------------------------------------------------------------------------
+# Operating System Files
+# -----------------------------------------------------------------------------
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# -----------------------------------------------------------------------------
+# Cloud & Infrastructure
+# -----------------------------------------------------------------------------
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.tfvars
+
+# AWS
+.aws/
+credentials
+config
+
+# Docker Machine
+.docker-machine/
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# -----------------------------------------------------------------------------
+# Monitoring & Performance
+# -----------------------------------------------------------------------------
+# Performance logs
+perf.data*
+*.perf
+
+# System monitoring
+*.rrd
+*.monitoring
+
+# -----------------------------------------------------------------------------
+# Custom Application Data
+# -----------------------------------------------------------------------------
+# Custom app data directories
+app-data/
+application-data/
+user-data/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuration files with sensitive data
+config.local.*
+settings.local.*
+.env.local
+.env.production
+
+# -----------------------------------------------------------------------------
+# Build & Compilation Artifacts
+# -----------------------------------------------------------------------------
+# C/C++
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# Go
+*.test
+*.prof
+
+# Rust
+target/
+Cargo.lock
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# -----------------------------------------------------------------------------
+# Network & Communication
+# -----------------------------------------------------------------------------
+# Network logs
+*.pcap
+*.pcapng
+
+# -----------------------------------------------------------------------------
+# Project Specific
+# -----------------------------------------------------------------------------
+# Test results
+test-results/
+test-output/
+benchmark-results/
+
+# Verification outputs
+verification-report-*
+system-check-*
+
+# Custom scripts generated at runtime
+generated-scripts/
+auto-generated/
+
+# User customizations
+local/
+personal/
+custom/
+
+# Backup directories
+backups/
+archive/
+
+# =============================================================================
+# END OF .gitignore
+# =============================================================================

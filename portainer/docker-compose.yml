@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "9000:9000"
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data:/data
+      - ./portainer_password:/data/portainer_password:ro
+    command:
+      - --admin-password-file
+      - /data/portainer_password
+      - --bind
+      - :9000
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - portainer_network
+
+networks:
+  portainer_network:
+    driver: bridge
+    name: portainer_network

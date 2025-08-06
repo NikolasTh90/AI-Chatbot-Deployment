@@ -65,9 +65,9 @@ Installs Docker Engine, Docker Compose, and configures GPU support.
 
 ### 4. Portainer Setup
 ```bash
-./scripts/setup-portainer.sh
+./portainer/setup-portainer.sh
 ```
-Deploys Portainer for web-based container management.
+Deploys Portainer for web-based container management using Docker Compose.
 
 ### 5. System Verification
 ```bash
@@ -101,7 +101,33 @@ Verifies all components are properly installed and configured.
 
 After successful setup:
 
+## 📁 Project Structure
+
+```
+.
+├── README.md                    # Comprehensive documentation
+├── scripts/                     # Setup and utility scripts
+│   ├── check-prerequisites.sh   # System requirements check
+│   ├── setup-datacenter.sh      # Main setup orchestrator
+│   ├── setup-system-utils.sh    # System utilities installation
+│   ├── setup-nvidia.sh          # NVIDIA GPU configuration
+│   ├── setup-docker.sh          # Docker platform setup
+│   ├── verify-setup.sh          # Installation verification
+│   ├── usage-guide.sh           # Usage instructions
+│   ├── update-portainer-password.sh # Portainer password management
+│   └── list-scripts.sh          # Script overview
+└── portainer/                   # Portainer Docker Compose setup
+    ├── docker-compose.yml       # Portainer service definition
+    ├── setup-portainer.sh       # Portainer setup script
+    ├── README.md                # Portainer documentation
+    └── data/                    # Portainer data (created on setup)
+```
+
+## 📊 Service Access
+
 - **Portainer Web UI**: `http://YOUR_SERVER_IP:9000`
+- **Admin credentials**: `./portainer/admin_password.txt`
+- **Management scripts**: `./portainer/{start,stop,restart,logs}.sh`
 - **Portainer Agent**: `http://YOUR_SERVER_IP:9001` (if enabled)
 
 ## 🔐 Security Notes

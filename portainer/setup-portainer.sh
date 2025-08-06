@@ -2,6 +2,7 @@
 
 # Portainer Setup Script
 # Installs and configures Portainer for Docker container management
+# Uses the docker-compose.yml file in the same directory
 
 set -e
 
@@ -28,14 +29,10 @@ warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-# Configuration
-PORTAINER_VERSION="latest"
+# Get script directory (where docker-compose.yml is located)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORTAINER_PORT="9000"
 PORTAINER_AGENT_PORT="9001"
-PORTAINER_DIR="$(dirname "$0")/../portainer"
-COMPOSE_FILE="$PORTAINER_DIR/docker-compose.yml"
-PORTAINER_PASSWORD_FILE="$PORTAINER_DIR/portainer_password"
-PORTAINER_DATA_DIR="$PORTAINER_DIR/data"
 
 # Check if Docker is available
 check_docker() {
@@ -52,6 +49,16 @@ check_docker() {
     success "Docker is available and running"
 }
 
+# Check if docker-compose.yml exists
+check_compose_file() {
+    if [[ ! -f "$SCRIPT_DIR/docker-compose.yml" ]]; then
+        error "docker-compose.yml not found in $SCRIPT_DIR"
+        exit 1
+    fi
+    
+    success "Docker Compose file found"
+}
+
 # Check if Portainer is already running
 portainer_running() {
     if sudo docker ps --format "table {{.Names}}" | grep -q "portainer"; then
@@ -63,60 +70,37 @@ portainer_running() {
 
 # Create Portainer data directory
 create_portainer_directory() {
-    log "Creating Portainer directory and data subdirectory..."
-    sudo mkdir -p "$PORTAINER_DATA_DIR"
-    sudo chown -R 1000:1000 "$PORTAINER_DIR" 2>/dev/null || true
-    success "Portainer directory created at $PORTAINER_DIR"
-}
-
-# Create Portainer agent compose file (optional)
-create_agent_compose_file() {
-    local agent_compose_file="${PORTAINER_DIR}/docker-compose-agent.yml"
+    log "Creating Portainer data directory..."
     
-    log "Creating Portainer Agent compose file..."
+    mkdir -p "$SCRIPT_DIR/data"
+    sudo chown -R 1000:1000 "$SCRIPT_DIR/data" 2>/dev/null || true
     
-    sudo tee "$agent_compose_file" > /dev/null << EOF
-version: '3.8'
-
-services:
-  portainer_agent:
-    image: portainer/agent:${PORTAINER_VERSION}
-    container_name: portainer_agent
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /var/lib/docker/volumes:/var/lib/docker/volumes
-    ports:
-      - "${PORTAINER_AGENT_PORT}:9001"
-    environment:
-      - AGENT_CLUSTER_ADDR=tasks.portainer_agent
-    networks:
-      - portainer_agent_network
-
-networks:
-  portainer_agent_network:
-    driver: overlay
-    attachable: true
-EOF
-    
-    success "Portainer Agent compose file created"
-    log "Agent compose file location: $agent_compose_file"
+    success "Portainer directory created at $SCRIPT_DIR/data"
 }
 
 # Generate default admin password
 generate_admin_password() {
-    local password_file="$PORTAINER_PASSWORD_FILE"
+    local password_file="$SCRIPT_DIR/portainer_password"
+    
     if [[ ! -f "$password_file" ]]; then
         log "Generating default admin password..."
+        
+        # Generate a secure random password
         local password=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-16)
+        
+        # Hash the password using bcrypt (Portainer's preferred method)
         local hashed_password=$(sudo docker run --rm httpd:2.4-alpine htpasswd -nbB admin "$password" | cut -d ":" -f 2)
-        echo "$hashed_password" | sudo tee "$password_file" > /dev/null
-        sudo chmod 600 "$password_file"
-        echo "$password" | sudo tee "$PORTAINER_DIR/admin_password.txt" > /dev/null
-        sudo chmod 600 "$PORTAINER_DIR/admin_password.txt"
+        
+        echo "$hashed_password" > "$password_file"
+        chmod 600 "$password_file"
+        
+        # Save the plain text password for the user
+        echo "$password" > "$SCRIPT_DIR/admin_password.txt"
+        chmod 600 "$SCRIPT_DIR/admin_password.txt"
+        
         success "Default admin password generated"
         log "Admin username: admin"
-        log "Admin password saved to: $PORTAINER_DIR/admin_password.txt"
+        log "Admin password saved to: $SCRIPT_DIR/admin_password.txt"
     else
         success "Admin password file already exists"
     fi
@@ -128,19 +112,27 @@ start_portainer() {
         success "Portainer is already running"
         return 0
     fi
+    
     log "Starting Portainer..."
-    sudo mkdir -p "$PORTAINER_DATA_DIR"
-    cd "$PORTAINER_DIR"
+    
+    # Change to script directory
+    cd "$SCRIPT_DIR"
+    
+    # Start Portainer using Docker Compose
     if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-        sudo docker compose -f docker-compose.yml up -d
+        docker compose up -d
     elif command -v docker-compose >/dev/null 2>&1; then
-        sudo docker-compose -f docker-compose.yml up -d
+        docker-compose up -d
     else
-        error "docker compose or docker-compose not found."
+        error "Neither docker compose nor docker-compose found"
         exit 1
     fi
+    
+    # Wait for Portainer to start
     log "Waiting for Portainer to start..."
     sleep 10
+    
+    # Check if Portainer is running
     if portainer_running; then
         success "Portainer started successfully"
     else
@@ -163,46 +155,14 @@ configure_firewall() {
     fi
 }
 
-# Create systemd service for auto-start (optional)
-create_systemd_service() {
-    local service_file="/etc/systemd/system/portainer.service"
-    
-    log "Creating systemd service for Portainer..."
-    
-    sudo tee "$service_file" > /dev/null << EOF
-[Unit]
-Description=Portainer Docker Management
-Requires=docker.service
-After=docker.service
-StartLimitIntervalSec=0
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=${PORTAINER_DIR}
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-TimeoutStartSec=0
-Restart=on-failure
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    
-    sudo systemctl daemon-reload
-    sudo systemctl enable portainer.service
-    
-    success "Systemd service created and enabled"
-}
 # Create management scripts
 create_management_scripts() {
     log "Creating Portainer management scripts..."
     
     # Start script
-    sudo tee "${PORTAINER_DIR}/start.sh" > /dev/null << EOF
+    cat > "$SCRIPT_DIR/start.sh" << 'EOF'
 #!/bin/bash
-cd ${PORTAINER_DIR}
+cd "$(dirname "$0")"
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     docker compose up -d
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -214,9 +174,9 @@ fi
 EOF
     
     # Stop script
-    sudo tee "${PORTAINER_DIR}/stop.sh" > /dev/null << EOF
+    cat > "$SCRIPT_DIR/stop.sh" << 'EOF'
 #!/bin/bash
-cd ${PORTAINER_DIR}
+cd "$(dirname "$0")"
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     docker compose down
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -228,18 +188,31 @@ fi
 EOF
     
     # Restart script
-    sudo tee "${PORTAINER_DIR}/restart.sh" > /dev/null << EOF
+    cat > "$SCRIPT_DIR/restart.sh" << 'EOF'
 #!/bin/bash
-cd ${PORTAINER_DIR}
+cd "$(dirname "$0")"
 ./stop.sh
 sleep 5
 ./start.sh
 EOF
     
+    # Logs script
+    cat > "$SCRIPT_DIR/logs.sh" << 'EOF'
+#!/bin/bash
+cd "$(dirname "$0")"
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    docker compose logs -f
+elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose logs -f
+else
+    docker logs -f portainer 2>/dev/null || echo "Portainer container not found"
+fi
+EOF
+    
     # Make scripts executable
-    sudo chmod +x "${PORTAINER_DIR}"/*.sh
-
-    success "Management scripts created in $PORTAINER_DIR"
+    chmod +x "$SCRIPT_DIR"/{start,stop,restart,logs}.sh
+    
+    success "Management scripts created in $SCRIPT_DIR"
 }
 
 # Display connection information
@@ -257,45 +230,39 @@ display_connection_info() {
     echo
     log "Default Credentials:"
     log "Username: admin"
-    log "Password: $(sudo cat ${PORTAINER_DIR}/admin_password.txt 2>/dev/null || echo 'See ${PORTAINER_DIR}/admin_password.txt')"
+    log "Password: $(cat $SCRIPT_DIR/admin_password.txt 2>/dev/null || echo 'See admin_password.txt')"
     echo
     log "Management Commands:"
-    log "Start:   sudo ${PORTAINER_DIR}/start.sh"
-    log "Stop:    sudo ${PORTAINER_DIR}/stop.sh"
-    log "Restart: sudo ${PORTAINER_DIR}/restart.sh"
+    log "Start:   $SCRIPT_DIR/start.sh"
+    log "Stop:    $SCRIPT_DIR/stop.sh"
+    log "Restart: $SCRIPT_DIR/restart.sh"
+    log "Logs:    $SCRIPT_DIR/logs.sh"
+    echo
+    log "Files Location: $SCRIPT_DIR"
+    log "- docker-compose.yml (stack definition)"
+    log "- admin_password.txt (plain text password)"
+    log "- portainer_password (bcrypt hash)"
+    log "- data/ (persistent data volume)"
     echo
     warning "SECURITY NOTE: Change the default password after first login!"
     warning "Consider setting up SSL/TLS for production use."
 }
+
 # Main function
 main() {
     log "Setting up Portainer..."
+    log "Working directory: $SCRIPT_DIR"
     
     # Pre-flight checks
     check_docker
+    check_compose_file
     
-    # Create directories
+    # Setup steps
     create_portainer_directory
-    
-    # Generate admin password
     generate_admin_password
-
-    # Create agent compose file
-    create_agent_compose_file
-    
-    # Start Portainer
     start_portainer
-    
-    # Configure firewall
     configure_firewall
-    
-    # Create systemd service
-    create_systemd_service
-    
-    # Create management scripts
     create_management_scripts
-    
-    # Display connection information
     display_connection_info
     
     success "Portainer setup completed successfully!"

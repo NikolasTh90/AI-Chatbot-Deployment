@@ -93,7 +93,9 @@ main() {
     bash "$SCRIPT_DIR/setup-docker.sh"
     
     log "Running Portainer setup..."
-    bash "$SCRIPT_DIR/setup-portainer.sh"
+    # Get the project root directory (parent of scripts)
+    PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+    bash "$PROJECT_ROOT/portainer/setup-portainer.sh"
     
     # Final system check
     log "Running post-installation verification..."
