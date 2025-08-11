@@ -126,7 +126,7 @@ After successful setup:
 ## 📊 Service Access
 
 - **Portainer Web UI**: `http://YOUR_SERVER_IP:9000`
-- **Admin credentials**: `./portainer/admin_password.txt`
+- **Admin credentials**: `./portainer/admin_password.txt`b
 - **Management scripts**: `./portainer/{start,stop,restart,logs}.sh`
 - **Portainer Agent**: `http://YOUR_SERVER_IP:9001` (if enabled)
 

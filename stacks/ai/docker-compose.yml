@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    volumes:
+      - ./data/npm:/data
+      - ./letsencrypt:/etc/letsencrypt
+    networks:
+      - proxy
+
+  open-webui:
+    image: quay.io/pxworks/open-webui:0.6.14
+    container_name: open-webui
+    restart: unless-stopped
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      # If Open WebUI supports configuring a reranker endpoint via env vars,
+      # set it here once you confirm the reranker's API and port:
+      # - RERANKER_BASE_URL=http://reranker:8000
+      - 'WEBUI_SECRET_KEY=svIIgEuDDdqJn+lbwpcZPZc/A6ts6AMJlW1uJSoYo+c='
+      - 'WEBUI_NAME=ParallaxWorks'
+      - 'NODE_OPTIONS=--max-old-space-size=16384'
+      - AIOHTTP_CLIENT_TIMEOUT=900
+      - AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST=30
+      - ENABLE_COMMUNITY_SHARING=False
+      - ENABLE_EVALUATION_ARENA_MODELS=False
+      - ENABLE_CODE_INTERPRETER=False
+      - ENABLE_CODE_EXECUTION=False
+      - ENABLE_VERSION_UPDATE_CHECK=False
+    volumes:
+      - ./data/open-webui:/app/backend/data
+    depends_on:
+      - ollama
+    networks:
+      - proxy
+      - ai
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks:
+      - ai
+    # For NVIDIA GPU support, uncomment the block below and ensure
+    # the NVIDIA Container Toolkit is installed on the host:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+  reranker:
+    image: quay.io/nikolas/reranker:cuda-12.4
+    container_name: reranker
+    restart: unless-stopped
+    networks:
+      - ai
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+networks:
+  proxy:
+    driver: bridge
+  ai:
+    driver: bridge
