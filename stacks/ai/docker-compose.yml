@@ -19,6 +19,8 @@ services:
     image: quay.io/pxworks/open-webui:0.6.14
     container_name: open-webui
     restart: unless-stopped
+    ports:
+      - "8080:8080"
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       # If Open WebUI supports configuring a reranker endpoint via env vars,
@@ -34,13 +36,22 @@ services:
       - ENABLE_CODE_INTERPRETER=False
       - ENABLE_CODE_EXECUTION=False
       - ENABLE_VERSION_UPDATE_CHECK=False
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
       - ./data/open-webui:/app/backend/data
     depends_on:
       - ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     networks:
-      - proxy
-      - ai
+          - proxy
+          - ai
 
   ollama:
     image: ollama/ollama:latest
@@ -66,7 +77,9 @@ services:
   reranker:
     image: quay.io/nikolas/reranker:cuda-12.4
     container_name: reranker
-    restart: unless-stopped
+    restart: unless-stopped     
+    volumes:
+      - ./data/reranker/hf:/workspace/hf
     networks:
       - ai
     deploy:
@@ -79,6 +92,9 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - MODEL_NAME=Qwen/Qwen3-Reranker-4B
+      - HF_HOME=/workspace/hf
+      - QUANTIZATION=fp8
 
 networks:
   proxy:
