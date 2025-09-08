@@ -225,13 +225,39 @@ install_docker_compose_standalone() {
 test_docker() {
     log "Testing Docker installation..."
     
-    # Test Docker engine
-    if sudo docker run --rm hello-world > /dev/null 2>&1; then
-        success "Docker engine is working correctly"
-    else
-        error "Docker engine test failed"
-        return 1
-    fi
+    # Wait for Docker daemon to be ready
+    local retries=5
+    local wait_time=3
+    
+    for ((i=1; i<=retries; i++)); do
+        log "Testing Docker engine (attempt $i/$retries)..."
+        
+        # First check if Docker daemon is responding
+        if sudo docker version >/dev/null 2>&1; then
+            log "Docker daemon is responding, testing with hello-world..."
+            
+            # Test Docker engine with hello-world
+            if sudo docker run --rm hello-world >/dev/null 2>&1; then
+                success "Docker engine is working correctly"
+                break
+            else
+                warning "Hello-world test failed on attempt $i"
+            fi
+        else
+            warning "Docker daemon not ready on attempt $i"
+        fi
+        
+        if [[ $i -lt $retries ]]; then
+            log "Waiting ${wait_time}s before retry..."
+            sleep $wait_time
+        else
+            error "Docker engine test failed after $retries attempts"
+            log "This may be due to group membership changes. Please try:"
+            log "  sudo systemctl status docker"
+            log "  sudo docker run --rm hello-world"
+            warning "Continuing setup - Docker may work after a logout/login or 'newgrp docker'"
+        fi
+    done
     
     # Test Docker Compose plugin
     if docker compose version > /dev/null 2>&1; then

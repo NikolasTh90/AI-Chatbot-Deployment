@@ -137,8 +137,13 @@ run_setup_step() {
     if "$script_path"; then
         success "Completed: $step_name"
     else
-        error "Failed: $step_name"
-        exit 1
+        if [[ "$optional" == "true" ]]; then
+            warning "Optional step failed: $step_name"
+            return 0
+        else
+            error "Failed: $step_name"
+            exit 1
+        fi
     fi
 }
 
@@ -316,7 +321,7 @@ main() {
     fi
     
     # Step 5: Docker
-    run_setup_step "Docker Platform" "$SCRIPT_DIR/scripts/setup-docker.sh"
+    run_setup_step "Docker Platform" "$SCRIPT_DIR/scripts/setup-docker.sh" "true"
     
     # Step 6: Check for reboot requirement
     prompt_reboot
