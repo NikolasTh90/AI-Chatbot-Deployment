@@ -157,13 +157,7 @@ configure_docker_daemon() {
     "live-restore": true,
     "userland-proxy": false,
     "experimental": false,
-    "metrics-addr": "127.0.0.1:9323",
-    "default-ulimits": {
-        "nofile": {
-            "hard": 64000,
-            "soft": 64000
-        }
-    }
+    "metrics-addr": "127.0.0.1:9323"
 }
 EOF
         success "Docker daemon configuration created"
