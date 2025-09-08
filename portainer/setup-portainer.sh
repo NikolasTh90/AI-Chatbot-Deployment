@@ -81,28 +81,61 @@ create_portainer_directory() {
 # Generate default admin password
 generate_admin_password() {
     local password_file="$SCRIPT_DIR/portainer_password"
+    local admin_password_file="$SCRIPT_DIR/admin_password.txt"
     
-    if [[ ! -f "$password_file" ]]; then
+    if [[ ! -f "$password_file" ]] || [[ ! -s "$password_file" ]]; then
         log "Generating default admin password..."
         
         # Generate a secure random password
         local password=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-16)
         
-        # Hash the password using bcrypt (Portainer's preferred method)
-        local hashed_password=$(sudo docker run --rm httpd:2.4-alpine htpasswd -nbB admin "$password" | cut -d ":" -f 2)
+        if [[ -z "$password" ]]; then
+            error "Failed to generate random password"
+            exit 1
+        fi
         
-        echo "$hashed_password" > "$password_file"
-        chmod 600 "$password_file"
+        log "Generated password: $password"
         
-        # Save the plain text password for the user
-        echo "$password" > "$SCRIPT_DIR/admin_password.txt"
-        chmod 600 "$SCRIPT_DIR/admin_password.txt"
+        # Save the plain text password first
+        echo "$password" > "$admin_password_file"
+        chmod 600 "$admin_password_file"
+        log "Plain text password saved to: $admin_password_file"
+        
+        # Hash the password using Portainer's helper (more reliable than htpasswd)
+        log "Generating password hash..."
+        if echo "$password" | docker run --rm -i portainer/helper-reset-password > "$password_file" 2>/dev/null; then
+            if [[ -s "$password_file" ]]; then
+                chmod 600 "$password_file"
+                success "Password hash generated successfully"
+                log "Hash file size: $(wc -c < "$password_file") bytes"
+            else
+                error "Password hash file is empty"
+                log "Trying alternative method..."
+                
+                # Fallback to htpasswd method
+                local hashed_password
+                hashed_password=$(docker run --rm httpd:2.4-alpine htpasswd -nbB admin "$password" 2>/dev/null | cut -d ":" -f 2)
+                
+                if [[ -n "$hashed_password" ]]; then
+                    echo "$hashed_password" > "$password_file"
+                    chmod 600 "$password_file"
+                    success "Password hash generated using fallback method"
+                else
+                    error "Failed to generate password hash"
+                    exit 1
+                fi
+            fi
+        else
+            error "Failed to generate password hash with Portainer helper"
+            exit 1
+        fi
         
         success "Default admin password generated"
         log "Admin username: admin"
-        log "Admin password saved to: $SCRIPT_DIR/admin_password.txt"
+        log "Admin password: $password"
     else
         success "Admin password file already exists"
+        log "Existing password: $(cat "$admin_password_file" 2>/dev/null || echo 'Unable to read')"
     fi
 }
 

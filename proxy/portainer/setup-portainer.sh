@@ -63,27 +63,56 @@ generate_admin_password() {
     local password_file="$SCRIPT_DIR/portainer_password"
     local admin_password_file="$SCRIPT_DIR/admin_password.txt"
     
-    if [[ ! -f "$password_file" ]]; then
+    if [[ ! -f "$password_file" ]] || [[ ! -s "$password_file" ]]; then
         log "Generating admin password..."
         
         # Generate secure random password
         local password
         password=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-16)
         
-        # Hash password for Portainer
-        local hashed_password
-        hashed_password=$(docker run --rm httpd:2.4-alpine htpasswd -nbB admin "$password" | cut -d ":" -f 2)
+        if [[ -z "$password" ]]; then
+            error "Failed to generate random password"
+            exit 1
+        fi
         
-        # Save files
-        echo "$hashed_password" > "$password_file"
+        log "Generated password: $password"
+        
+        # Save plain text password first
         echo "$password" > "$admin_password_file"
+        chmod 600 "$admin_password_file"
+        log "Plain text password saved"
         
-        chmod 600 "$password_file" "$admin_password_file"
+        # Try Portainer helper first
+        log "Generating password hash..."
+        if echo "$password" | docker run --rm -i portainer/helper-reset-password > "$password_file" 2>/dev/null; then
+            if [[ -s "$password_file" ]]; then
+                chmod 600 "$password_file"
+                success "Password hash generated successfully"
+            else
+                log "Portainer helper produced empty file, using fallback..."
+                # Fallback to htpasswd
+                local hashed_password
+                hashed_password=$(docker run --rm httpd:2.4-alpine htpasswd -nbB admin "$password" 2>/dev/null | cut -d ":" -f 2)
+                
+                if [[ -n "$hashed_password" ]]; then
+                    echo "$hashed_password" > "$password_file"
+                    chmod 600 "$password_file"
+                    success "Password hash generated using htpasswd fallback"
+                else
+                    error "Failed to generate password hash"
+                    exit 1
+                fi
+            fi
+        else
+            error "Failed to generate password hash"
+            exit 1
+        fi
         
         success "Admin password generated"
-        log "Plain text password saved to: $admin_password_file"
+        log "Password: $password"
     else
         success "Admin password already exists"
+        log "Existing password: $(cat "$admin_password_file" 2>/dev/null || echo 'Unable to read')"
     fi
 }
 
