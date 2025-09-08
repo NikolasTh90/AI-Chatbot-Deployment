@@ -58,7 +58,26 @@ create_proxy_network() {
     fi
 }
 
-# Generate admin password
+# Setup for first-time default behavior (no pre-configured admin)
+setup_first_time_behavior() {
+    log "Setting up Portainer for first-time configuration..."
+    
+    # Remove any existing password files to ensure clean start
+    if [[ -f "$SCRIPT_DIR/portainer_password" ]]; then
+        log "Removing existing password file for clean setup"
+        rm -f "$SCRIPT_DIR/portainer_password"
+    fi
+    
+    if [[ -f "$SCRIPT_DIR/admin_password.txt" ]]; then
+        log "Removing existing admin password file for clean setup"
+        rm -f "$SCRIPT_DIR/admin_password.txt"
+    fi
+    
+    success "Portainer will use default first-time setup behavior"
+    success "Admin user will be created through web interface on first access"
+}
+
+# Legacy function kept for compatibility
 generate_admin_password() {
     local password_file="$SCRIPT_DIR/portainer_password"
     local admin_password_file="$SCRIPT_DIR/admin_password.txt"

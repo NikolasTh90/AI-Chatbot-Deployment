@@ -193,8 +193,11 @@ Server IP: $server_ip
 PORTAINER WEB UI
 ===============
 URL: http://$server_ip:9000
-Username: admin
-Password: $(cat portainer/admin_password.txt 2>/dev/null || echo "Check portainer/admin_password.txt")
+
+FIRST-TIME SETUP:
+1. Access the URL above in your browser
+2. Create admin user on first visit (choose your own username/password)
+3. No pre-configured credentials needed
 
 NEXT STEPS
 ==========

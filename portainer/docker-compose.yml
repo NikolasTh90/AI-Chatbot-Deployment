@@ -1,4 +1,4 @@
-version: '3.8'
+ version: '3.8'
 
 services:
   portainer:
@@ -16,14 +16,8 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data:/data
-      - ./portainer_password:/data/portainer_password:ro
-    command:
-      - --admin-password-file
-      - /data/portainer_password
-      - --bind
-      - :9000
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/"]
       interval: 30s
       timeout: 10s
       retries: 3
