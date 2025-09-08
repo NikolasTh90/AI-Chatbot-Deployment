@@ -1,26 +1,10 @@
 version: "3.9"
 
 services:
-  nginx-proxy-manager:
-    image: jc21/nginx-proxy-manager:latest
-    container_name: nginx-proxy-manager
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "81:81"
-      - "443:443"
-    volumes:
-      - ./data/npm:/data
-      - ./letsencrypt:/etc/letsencrypt
-    networks:
-      - proxy
-
   open-webui:
     image: quay.io/pxworks/open-webui:0.6.14
     container_name: open-webui
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       # If Open WebUI supports configuring a reranker endpoint via env vars,
@@ -50,8 +34,8 @@ services:
               count: all
               capabilities: [gpu]
     networks:
-          - proxy
-          - ai
+      - proxy
+      - ai
 
   ollama:
     image: ollama/ollama:latest
@@ -98,6 +82,9 @@ services:
 
 networks:
   proxy:
+    name: proxy
     driver: bridge
+    external: true
   ai:
+    name: ai
     driver: bridge

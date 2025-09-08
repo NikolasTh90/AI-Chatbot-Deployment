@@ -106,6 +106,19 @@ generate_admin_password() {
     fi
 }
 
+# Create proxy network if it doesn't exist
+create_proxy_network() {
+    log "Checking for proxy network..."
+    
+    if ! docker network ls | grep -q "proxy"; then
+        log "Creating proxy network..."
+        docker network create proxy
+        success "Proxy network created"
+    else
+        success "Proxy network already exists"
+    fi
+}
+
 # Start Portainer
 start_portainer() {
     if portainer_running; then
@@ -260,6 +273,7 @@ main() {
     # Setup steps
     create_portainer_directory
     generate_admin_password
+    create_proxy_network
     start_portainer
     configure_firewall
     create_management_scripts

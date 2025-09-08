@@ -1,0 +1,13 @@
+version: "3.9"
+
+# GPU-enabled override for infrastructure services
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+services:
+  nginx-proxy-manager:
+    # NPM doesn't need GPU access - no overrides needed
+    image: jc21/nginx-proxy-manager:latest
+
+  portainer:
+    # Portainer doesn't need GPU access - no overrides needed
+    image: portainer/portainer-ce:latest

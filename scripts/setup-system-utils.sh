@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# System Utilities Setup Script
-# Installs essential tools including git, helix editor, and other utilities
+# System Packages Setup Script  
+# Installs essential system packages using nala package manager
+# This script replaces the old setup-system-utils.sh with nala-based installation
 
 set -e
 

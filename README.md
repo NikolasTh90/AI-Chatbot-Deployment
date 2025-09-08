@@ -1,45 +1,51 @@
-# NVIDIA GPU Data Center Instance Setup
+# Ubuntu Data Center Instance Setup
 
-This collection of utility scripts sets up an Ubuntu 24.04 LTS AWS G6 instance for GPU workloads with Docker and Portainer management.
+Automated setup for Ubuntu 24.04 LTS instances with Docker containerization, optional NVIDIA GPU support, and web-based container management.
 
 ## 🚀 Quick Start
 
-1. **Clone or download this repository to your server**
-2. **Make scripts executable:**
-   ```bash
-   chmod +x scripts/*.sh
-   ```
-3. **Run the main setup script:**
-   ```bash
-   ./scripts/setup-datacenter.sh
-   ```
-4. **Reboot the system after setup completes**
-5. **Verify installation:**
-   ```bash
-   ./scripts/verify-setup.sh
-   ```
+**Single Command Setup:**
+```bash
+# Basic setup (no NVIDIA)
+./setup.sh
+
+# With NVIDIA GPU support
+./setup.sh --nvidia
+
+# Automated setup with reboot
+./setup.sh --nvidia --force-reboot
+```
+
+**What happens:**
+1. System packages installation (using nala)
+2. Optional NVIDIA drivers, CUDA, and container toolkit
+3. Docker and Docker Compose installation
+4. Portainer deployment with generated credentials
+5. Proxy network creation for service management
+6. Setup verification and credential display
 
 ## 📋 What Gets Installed
 
-### System Utilities
-- **nala** - Modern APT package manager
-- **git** - Version control system
-- **Helix (hx)** - Modern text editor
-- **Build tools** - gcc, make, cmake, etc.
-- **Development tools** - Python3, Node.js, pip, npm
-- **System monitoring** - htop, iotop, iftop, nethogs, etc.
-- **Network tools** - curl, wget, netstat, etc.
-- **Utilities** - jq, tree, tmux, screen, etc.
-
-### NVIDIA GPU Support
-- **NVIDIA Drivers** - Latest recommended drivers
-- **CUDA Toolkit** - Full CUDA development environment
-- **NVIDIA Container Toolkit** - Docker GPU support
+### System Packages (via nala)
+- **Essential tools**: git, curl, wget, jq, tree, vim, nano
+- **Build tools**: build-essential, cmake, make, gcc
+- **Development**: Python3, Node.js, npm, pip
+- **Monitoring**: htop, iotop, iftop, ncdu, nethogs
+- **Network tools**: tcpdump, net-tools, netstat
+- **Text editor**: Helix (modern modal editor)
+- **Terminal tools**: tmux, screen, rsync
 
 ### Container Platform
-- **Docker Engine** - Latest stable version
-- **Docker Compose** - Both plugin and standalone versions
-- **Portainer** - Web-based Docker management interface
+- **Docker Engine** - Latest stable with optimized configuration
+- **Docker Compose** - Plugin and standalone versions
+- **Proxy Network** - For service interconnection
+- **Portainer** - Web-based container management
+
+### NVIDIA Support (Optional)
+- **NVIDIA Drivers** - Latest recommended drivers
+- **CUDA Toolkit** - Development environment
+- **Container Toolkit** - GPU access for containers
+- **Auto-configuration** - Docker GPU runtime setup
 
 ## 🛠️ Individual Scripts
 

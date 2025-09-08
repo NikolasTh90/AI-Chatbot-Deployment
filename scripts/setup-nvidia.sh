@@ -208,7 +208,11 @@ main() {
     log "Setting up NVIDIA GPU support..."
     
     # Check for NVIDIA GPU
-    check_nvidia_gpu
+    if ! check_nvidia_gpu 2>/dev/null; then
+        error "NVIDIA GPU support requested but no compatible GPU found"
+        error "Please run this script only on systems with NVIDIA GPUs"
+        exit 1
+    fi
     
     # Install NVIDIA drivers
     install_nvidia_drivers
@@ -226,9 +230,10 @@ main() {
     test_nvidia_setup
     
     success "NVIDIA GPU setup completed!"
-    log "Note: If this is a fresh driver installation, please reboot the system:"
-    log "sudo reboot"
+    log "Note: If this is a fresh driver installation, please reboot the system"
 }
 
-# Run main function
-main "$@"
+# Check if script is being run directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

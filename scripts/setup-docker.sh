@@ -268,6 +268,18 @@ cleanup_docker() {
     success "Docker system cleaned up"
 }
 
+# Create proxy network for container management
+create_proxy_network() {
+    log "Creating proxy network for container management..."
+    
+    if ! docker network ls | grep -q "proxy"; then
+        docker network create proxy
+        success "Proxy network created"
+    else
+        success "Proxy network already exists"
+    fi
+}
+
 # Main function
 main() {
     log "Setting up Docker and Docker Compose..."
@@ -294,6 +306,9 @@ main() {
     
     # Test installation
     test_docker
+    
+    # Create proxy network for container management
+    create_proxy_network
     
     # Cleanup
     cleanup_docker
