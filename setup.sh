@@ -65,10 +65,13 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check sudo access
+    # Check sudo access - first try non-interactive, then prompt if needed
     if ! sudo -n true 2>/dev/null; then
-        error "This script requires sudo privileges. Please run: sudo -v"
-        exit 1
+        log "This script requires sudo privileges. Checking sudo access..."
+        if ! sudo -v; then
+            error "Failed to obtain sudo privileges. Please ensure your user has sudo access."
+            exit 1
+        fi
     fi
     
     # Check OS
