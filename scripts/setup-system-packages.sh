@@ -95,7 +95,6 @@ install_system_essentials() {
         # Network tools
         "tcpdump"
         "net-tools"
-        "netstat"
         
         # Development tools
         "git"
