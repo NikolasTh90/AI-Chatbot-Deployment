@@ -1,0 +1,217 @@
+version: "3.9"
+
+services:
+  openproject:
+    image: openproject/community:13
+    container_name: openproject
+    environment:
+      # Basic configuration
+      - OPENPROJECT_SECRET_KEY_BASE=${OPENPROJECT_SECRET_KEY_BASE}
+      - OPENPROJECT_HOST__NAME=${OPENPROJECT_HOST_NAME}
+      - OPENPROJECT_HTTPS=${OPENPROJECT_HTTPS:-true}
+      
+      # Database configuration
+      - DATABASE_URL=postgres://django:${POSTGRES_PASSWORD}@postgres-main:5432/openproject_db
+      
+      # Cache configuration
+      - OPENPROJECT_CACHE__MEMCACHE__SERVER=${OPENPROJECT_CACHE_MEMCACHE_SERVER:-memcached:11211}
+      - OPENPROJECT_RAILS__CACHE__STORE=memcache
+      
+      # Email configuration (optional)
+      - OPENPROJECT_EMAIL__DELIVERY__METHOD=${OPENPROJECT_EMAIL_DELIVERY_METHOD:-smtp}
+      - SMTP_ADDRESS=${SMTP_ADDRESS}
+      - SMTP_AUTHENTICATION=${SMTP_AUTHENTICATION:-login}
+      - SMTP_USER_NAME=${SMTP_USER_NAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_DOMAIN=${SMTP_DOMAIN}
+      - SMTP_ENABLE_STARTTLS_AUTO=${SMTP_ENABLE_STARTTLS_AUTO:-true}
+      
+      # Performance configuration
+      - OPENPROJECT_RAILS__RELATIVE__URL__ROOT=${OPENPROJECT_RAILS_RELATIVE_URL_ROOT:-/}
+      - OPENPROJECT_WEB__THREADS=${OPENPROJECT_WEB_THREADS:-2}
+      - OPENPROJECT_WEB__WORKERS=${OPENPROJECT_WEB_WORKERS:-2}
+      
+      # Security configuration
+      - OPENPROJECT_RAILS__SESSION__STORE=tokyo_store
+      - OPENPROJECT_RAILS__SESSION__TIMEOUT=86400
+      
+      # File storage configuration
+      - OPENPROJECT_ATTACHMENTS__STORAGE__FILE=File
+      
+      # Logging configuration
+      - OPENPROJECT_RAILS__LOG__LEVEL=${OPENPROJECT_RAILS_LOG_LEVEL:-info}
+      - OPENPROJECT_RAILS__LOG__TO=stdout
+    volumes:
+      - openproject_pgdata:/var/openproject/pgdata
+      - openproject_assets:/var/openproject/assets
+      - openproject_config:/var/openproject/config
+      - openproject_files:/var/openproject/files
+    networks:
+      - proxy
+      - db_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health_checks/default"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    ports:
+      - "8080:8080"
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - postgres-wait
+
+  # PostgreSQL wait service - ensures PostgreSQL is ready before OpenProject starts
+  postgres-wait:
+    image: postgres:15
+    container_name: postgres_wait_openproject
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - db_net
+    restart: "no"
+    command: >
+      sh -c "
+      echo 'Waiting for PostgreSQL to be ready...'
+      until pg_isready -h postgres-main -U django; do
+        echo 'PostgreSQL not ready, waiting...'
+        sleep 5
+      done
+      echo 'PostgreSQL is ready!'
+      
+      # Create OpenProject database if it doesn't exist
+      echo 'Checking for OpenProject database...'
+      if ! PGPASSWORD=$POSTGRES_PASSWORD psql -h postgres-main -U django -lqt | cut -d \\| -f 1 | grep -qw openproject_db; then
+        echo 'Creating OpenProject database...'
+        PGPASSWORD=$POSTGRES_PASSWORD createdb -h postgres-main -U django openproject_db
+        echo 'OpenProject database created.'
+      else
+        echo 'OpenProject database already exists.'
+      fi
+      "
+
+  # Memcached cache (optional for performance)
+  memcached:
+    image: memcached:1.6-alpine
+    container_name: openproject_memcached
+    command: ["memcached", "-m", "256", "-I", "32m"]
+    networks:
+      - db_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "11211"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.1'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+
+  # OpenProject backup service
+  openproject-backup:
+    image: postgres:15
+    container_name: openproject_backup
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_SCHEDULE: 0 2 * * *
+    volumes:
+      - openproject_backup:/backups
+      - ./backup-scripts:/scripts:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - db_net
+    restart: unless-stopped
+    command: >
+      sh -c "
+      echo 'OpenProject Backup Service'
+      echo 'Schedule: $BACKUP_SCHEDULE'
+      
+      # Install curl and other utilities
+      apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+      
+      while true; do
+        current_time=\$(date +%H:%M)
+        
+        # Run backup at 2:00 AM daily
+        if [ \"\$current_time\" = \"02:00\" ]; then
+          echo 'Starting OpenProject backup at \$(date)'
+          /scripts/backup-openproject.sh
+          echo 'OpenProject backup completed at \$(date)'
+        fi
+        
+        sleep 60
+      done
+      "
+    depends_on:
+      openproject:
+        condition: service_healthy
+
+  # OpenProject monitoring and health watcher
+  openproject-health:
+    image: python:3.12-slim
+    container_name: openproject_health
+    volumes:
+      - ./health-scripts:/health-scripts
+    networks:
+      - proxy
+    restart: unless-stopped
+    command: ["python", "/health-scripts/openproject_health.py"]
+    environment:
+      - HEALTH_CHECK_INTERVAL=60
+      - OPENPROJECT_URL=http://openproject:8080
+    depends_on:
+      openproject:
+        condition: service_healthy
+
+volumes:
+  openproject_pgdata:
+    driver: local
+    labels:
+      - "stack=openproject"
+      - "type=database"
+  openproject_assets:
+    driver: local
+    labels:
+      - "stack=openproject"
+      - "type=assets"
+  openproject_config:
+    driver: local
+    labels:
+      - "stack=openproject"
+      - "type=config"
+  openproject_files:
+    driver: local
+    labels:
+      - "stack=openproject"
+      - "type=files"
+  openproject_backup:
+    driver: local
+    labels:
+      - "stack=openproject"
+      - "type=backup"
+
+networks:
+  proxy:
+    external: true
+  db_net:
+    external: true

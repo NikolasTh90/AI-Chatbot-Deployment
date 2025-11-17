@@ -1,0 +1,136 @@
+version: "3.8"
+
+services:
+  wp_multisite:
+    image: wordpress:php8.2-apache
+    container_name: wp_multisite
+    environment:
+      WORDPRESS_DB_HOST: mysql-main
+      WORDPRESS_DB_USER: wp_multi_user
+      WORDPRESS_DB_PASSWORD: ${WP_MULTI_PASSWORD}
+      WORDPRESS_DB_NAME: wp_multisite
+      WORDPRESS_TABLE_PREFIX: wp_
+    volumes:
+      - ./multisite/html:/var/www/html
+      - ./config/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    networks:
+      - proxy
+      - db_net
+    restart: unless-stopped
+    depends_on:
+      mysql-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  wp_single1:
+    image: wordpress:php8.2-apache
+    container_name: wp_single1
+    environment:
+      WORDPRESS_DB_HOST: mysql-main
+      WORDPRESS_DB_USER: wp_single1_user
+      WORDPRESS_DB_PASSWORD: ${WP_SINGLE1_PASSWORD}
+      WORDPRESS_DB_NAME: wp_single1
+      WORDPRESS_TABLE_PREFIX: wp_
+    volumes:
+      - ./single1/html:/var/www/html
+      - ./config/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    networks:
+      - proxy
+      - db_net
+    restart: unless-stopped
+    depends_on:
+      mysql-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  wp_single2:
+    image: wordpress:php8.2-apache
+    container_name: wp_single2
+    environment:
+      WORDPRESS_DB_HOST: mysql-main
+      WORDPRESS_DB_USER: wp_single2_user
+      WORDPRESS_DB_PASSWORD: ${WP_SINGLE2_PASSWORD}
+      WORDPRESS_DB_NAME: wp_single2
+      WORDPRESS_TABLE_PREFIX: wp_
+    volumes:
+      - ./single2/html:/var/www/html
+      - ./config/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    networks:
+      - proxy
+      - db_net
+    restart: unless-stopped
+    depends_on:
+      mysql-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  backup-wordpress:
+    image: mysql:8.0
+    container_name: backup-wordpress
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - ./backup-scripts:/scripts
+    networks:
+      - db_net
+    restart: "no"
+    command: >
+      sh -c "
+      while true; do
+        echo 'Running WordPress backups...'
+        /scripts/backup-wordpress.sh
+        echo 'Next backup in 24 hours...'
+        sleep 86400
+      done
+      "
+    depends_on:
+      mysql-main:
+        condition: service_healthy
+
+volumes:
+  wp_multisite_data:
+    driver: local
+  wp_single1_data:
+    driver: local
+  wp_single2_data:
+    driver: local
+
+networks:
+  proxy:
+    external: true
+  db_net:
+    external: true

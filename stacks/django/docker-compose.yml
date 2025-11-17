@@ -1,0 +1,171 @@
+version: "3.9"
+
+services:
+  jopi:
+    image: ${DOCKER_REGISTRY:-docker.io}/jopi:${JOPI_VERSION:-latest}
+    container_name: jopi_app
+    env_file:
+      - .env.jopi
+    networks:
+      - proxy
+      - db_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "10", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    volumes:
+      - jopi_media:/app/media
+      - jopi_static:/app/static
+      - jopi_logs:/app/logs
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+  synergas:
+    image: ${DOCKER_REGISTRY:-docker.io}/synergas:${SYNERGAS_VERSION:-latest}
+    container_name: synergas_app
+    env_file:
+      - .env.synergas
+    networks:
+      - proxy
+      - db_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--max-time", "10", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    volumes:
+      - synergas_media:/app/media
+      - synergas_static:/app/static
+      - synergas_logs:/app/logs
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+  # Django monitoring and management
+  django-management:
+    image: python:3.12-slim
+    container_name: django_management
+    env_file:
+      - .env.jopi
+      - .env.synergas
+    networks:
+      - db_net
+    restart: "no"
+    command: >
+      sh -c "
+      echo 'Django Management Container'
+      echo 'Run management commands via: docker exec -it django_management python manage.py <command>'
+      tail -f /dev/null
+      "
+    volumes:
+      - ./management-scripts:/scripts
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+
+  # Health check watcher
+  django-health-watcher:
+    image: python:3.12-slim
+    container_name: django_health_watcher
+    networks:
+      - proxy
+    restart: unless-stopped
+    volumes:
+      - ./health-scripts:/health-scripts
+    command: ["python", "/health-scripts/health_watcher.py"]
+    environment:
+      - HEALTH_CHECK_INTERVAL=60
+    depends_on:
+      jopi:
+        condition: service_healthy
+      synergas:
+        condition: service_healthy
+
+volumes:
+  jopi_media:
+    driver: local
+    labels:
+      - "stack=django"
+      - "app=jopi"
+      - "type=media"
+  jopi_static:
+    driver: local
+    labels:
+      - "stack=django"
+      - "app=jopi"
+      - "type=static"
+  jopi_logs:
+    driver: local
+    labels:
+      - "stack=django"
+      - "app=jopi"
+      - "type=logs"
+  synergas_media:
+    driver: local
+    labels:
+      - "stack=django"
+      - "app=synergas"
+      - "type=media"
+  synergas_static:
+    driver: local
+    labels:
+      - "stack=django"
+      - "app=synergas"
+      - "type=static"
+  synergas_logs:
+    driver: local
+    labels:
+      - "stack=django"
+      - "app=synergas"
+      - "type=logs"
+
+networks:
+  proxy:
+    external: true
+  db_net:
+    external: true

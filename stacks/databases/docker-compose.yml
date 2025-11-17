@@ -1,0 +1,124 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-main
+    environment:
+      POSTGRES_USER: django
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: default_db
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+      - ./backups:/backups
+    networks:
+      - db_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U django -d default_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-main
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: default_db
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    command: 
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb-buffer-pool-size=512M
+      - --max-connections=100
+      - --slow-query-log=1
+      - --long-query-time=2
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d
+      - ./backups:/backups
+    networks:
+      - db_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # Backup service for automated database backups
+  db-backup:
+    image: postgres:15
+    container_name: db-backup
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - ./backup-scripts:/scripts
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - db_net
+    restart: unless-stopped
+    command: >
+      sh -c "
+      while true; do
+        echo 'Starting daily backup at $(date)'
+        /scripts/backup-all.sh
+        echo 'Backup completed at $(date)'
+        sleep 86400
+      done
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+    labels:
+      - "backup=true"
+      - "stack=databases"
+  mysql_data:
+    driver: local
+    labels:
+      - "backup=true"
+      - "stack=databases"
+
+networks:
+  db_net:
+    driver: bridge
+    name: db_net
+    internal: true
+    labels:
+      - "stack=databases"
+      - "environment=production"
