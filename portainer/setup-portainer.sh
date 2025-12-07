@@ -51,12 +51,19 @@ check_docker() {
 
 # Check if docker-compose.yml exists
 check_compose_file() {
-    if [[ ! -f "$SCRIPT_DIR/docker-compose.yml" ]]; then
-        error "docker-compose.yml not found in $SCRIPT_DIR"
-        exit 1
-    fi
+    local compose_file="$SCRIPT_DIR/docker-compose-full.yml"
     
-    success "Docker Compose file found"
+    if [[ ! -f "$compose_file" ]]; then
+        # Fallback to original file
+        compose_file="$SCRIPT_DIR/docker-compose.yml"
+        if [[ ! -f "$compose_file" ]]; then
+            error "No docker-compose.yml or docker-compose-full.yml found in $SCRIPT_DIR"
+            exit 1
+        fi
+        success "Using basic docker-compose.yml"
+    else
+        success "Using full docker-compose-full.yml (Portainer + Agent)"
+    fi
 }
 
 # Check if Portainer is already running
@@ -217,11 +224,24 @@ start_portainer() {
     # Change to script directory
     cd "$SCRIPT_DIR"
     
+    # Determine which compose file to use
+    local compose_file=""
+    if [[ -f "docker-compose-full.yml" ]]; then
+        compose_file="docker-compose-full.yml"
+        log "Using full setup with Portainer Agent"
+    elif [[ -f "docker-compose.yml" ]]; then
+        compose_file="docker-compose.yml"
+        log "Using basic setup without Agent"
+    else
+        error "No docker compose file found"
+        exit 1
+    fi
+    
     # Start Portainer using Docker Compose
     if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-        docker compose up -d
+        docker compose -f "$compose_file" up -d
     elif command -v docker-compose >/dev/null 2>&1; then
-        docker-compose up -d
+        docker-compose -f "$compose_file" up -d
     else
         error "Neither docker compose nor docker-compose found"
         exit 1
@@ -234,6 +254,15 @@ start_portainer() {
     # Check if Portainer is running
     if portainer_running; then
         success "Portainer started successfully"
+        
+        # Check if agent is also running (if using full setup)
+        if [[ "$compose_file" == "docker-compose-full.yml" ]]; then
+            if docker ps --format "table {{.Names}}" | grep -q "portainer_agent"; then
+                success "Portainer Agent is also running"
+            else
+                warning "Portainer Agent may not be running properly"
+            fi
+        fi
     else
         error "Failed to start Portainer"
         return 1
@@ -262,10 +291,23 @@ create_management_scripts() {
     cat > "$SCRIPT_DIR/start.sh" << 'EOF'
 #!/bin/bash
 cd "$(dirname "$0")"
+
+# Determine which compose file to use
+if [[ -f "docker-compose-full.yml" ]]; then
+    COMPOSE_FILE="docker-compose-full.yml"
+elif [[ -f "docker-compose.yml" ]]; then
+    COMPOSE_FILE="docker-compose.yml"
+else
+    echo "No docker compose file found"
+    exit 1
+fi
+
+echo "Using: $COMPOSE_FILE"
+
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    docker compose up -d
+    docker compose -f "$COMPOSE_FILE" up -d
 elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose up -d
+    docker-compose -f "$COMPOSE_FILE" up -d
 else
     echo "Neither docker compose nor docker-compose found"
     exit 1
@@ -276,13 +318,28 @@ EOF
     cat > "$SCRIPT_DIR/stop.sh" << 'EOF'
 #!/bin/bash
 cd "$(dirname "$0")"
+
+# Determine which compose file to use
+if [[ -f "docker-compose-full.yml" ]]; then
+    COMPOSE_FILE="docker-compose-full.yml"
+elif [[ -f "docker-compose.yml" ]]; then
+    COMPOSE_FILE="docker-compose.yml"
+else
+    echo "No docker compose file found"
+    exit 1
+fi
+
+echo "Stopping: $COMPOSE_FILE"
+
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    docker compose down
+    docker compose -f "$COMPOSE_FILE" down
 elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose down
+    docker-compose -f "$COMPOSE_FILE" down
 else
     docker stop portainer 2>/dev/null || true
     docker rm portainer 2>/dev/null || true
+    docker stop portainer_agent 2>/dev/null || true
+    docker rm portainer_agent 2>/dev/null || true
 fi
 EOF
     
@@ -299,12 +356,27 @@ EOF
     cat > "$SCRIPT_DIR/logs.sh" << 'EOF'
 #!/bin/bash
 cd "$(dirname "$0")"
-if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    docker compose logs -f
-elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose logs -f
+
+# Determine which compose file to use
+if [[ -f "docker-compose-full.yml" ]]; then
+    COMPOSE_FILE="docker-compose-full.yml"
+elif [[ -f "docker-compose.yml" ]]; then
+    COMPOSE_FILE="docker-compose.yml"
 else
+    echo "No docker compose file found"
+    exit 1
+fi
+
+echo "Viewing logs for: $COMPOSE_FILE"
+
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    docker compose -f "$COMPOSE_FILE" logs -f
+elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose -f "$COMPOSE_FILE" logs -f
+else
+    echo "Following individual container logs:"
     docker logs -f portainer 2>/dev/null || echo "Portainer container not found"
+    docker logs -f portainer_agent 2>/dev/null || echo "Portainer Agent container not found"
 fi
 EOF
     
@@ -339,9 +411,17 @@ display_connection_info() {
     log "Logs:    $SCRIPT_DIR/logs.sh"
     echo
     log "Files Location: $SCRIPT_DIR"
-    log "- docker-compose.yml (stack definition)"
+    if [[ -f "$SCRIPT_DIR/docker-compose-full.yml" ]]; then
+        log "- docker-compose-full.yml (Portainer + Agent)"
+    else
+        log "- docker-compose.yml (basic setup)"
+    fi
     log "- data/ (persistent data volume)"
     echo
+    if [[ -f "$SCRIPT_DIR/docker-compose-full.yml" ]]; then
+        log "Agent Endpoint: http://${local_ip}:${PORTAINER_AGENT_PORT}"
+        log "You can connect Portainer to the agent via Settings → Edge"
+    fi
     warning "SECURITY NOTE: Change the default password after first login!"
     warning "Consider setting up SSL/TLS for production use."
 }
