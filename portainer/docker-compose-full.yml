@@ -13,8 +13,9 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -38,7 +39,7 @@ services:
     networks:
       - portainer_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9001/ping"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9001/ping || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
