@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  nginx-ui:
+    image: uozi/nginx-ui:latest
+    container_name: nginx-ui
+    restart: always
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - /mnt/user/appdata/nginx:/etc/nginx
+      - /mnt/user/appdata/nginx-ui:/etc/nginx-ui
+      - /var/www:/var/www
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:80"
+      - "8443:443"
+    networks:
+      - proxy-network
+
+networks:
+  proxy-network:
+    name: proxy-network
+    driver: bridge
+    external: true
