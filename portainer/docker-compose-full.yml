@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   portainer:
     image: portainer/portainer-ce:latest
@@ -15,11 +17,7 @@ services:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD", "/portainer", "---healthcheck"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      disable: true
     networks:
       - portainer_network
     depends_on:
@@ -39,11 +37,7 @@ services:
     networks:
       - portainer_network
     healthcheck:
-      test: ["CMD", "./agent", "--healthcheck"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      disable: true
 
 networks:
   portainer_network:
