@@ -7,6 +7,7 @@ networks:
 volumes:
   pgdata:
   opdata:
+  app_models:
 
 services:
   db:
@@ -51,76 +52,10 @@ services:
   web:
     image: openproject/openproject:${TAG:-16-slim}
     restart: unless-stopped
-    command:
-      - bash
-      - -c
-      - |
-        echo 'Creating enterprise token override...' &&
-        mkdir -p /tmp/enterprise_patch &&
-        echo 'class EnterpriseToken < ApplicationRecord' > /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  class << self' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def current' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      RequestStore.fetch(:current_ee_token) do' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '        set_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def table_exists?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      connection.data_source_exists? table_name' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def allows_to?(action)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def active?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def show_banners?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def set_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      token = EnterpriseToken.order(Arel.sql('"'"'created_at DESC'"'"')).first' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      if token&.token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '        token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validates :encoded_token, presence: true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validate :valid_token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validate :valid_domain' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  before_save :unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  before_destroy :unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  delegate :will_expire?, :subscriber, :mail, :company, :domain, :issued_at, :starts_at, :expires_at, :reprieve_days, :reprieve_days_left, :restrictions, to: :token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    load_token! unless defined?(@token_object)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    @token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def allows_to?(action)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    RequestStore.delete :current_ee_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def expired?(reprieve: true)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def invalid_domain?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  private' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def load_token!' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    @token_object = OpenProject::Token.import(encoded_token)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  rescue OpenProject::Token::ImportError => e' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    Rails.logger.error "Failed to load EE token: #{e}"' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    nil' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def valid_token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    errors.add(:encoded_token, :unreadable) unless load_token!' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def valid_domain' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    errors.add :domain, :invalid if invalid_domain?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo 'end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        cp /tmp/enterprise_patch/enterprise_token.rb /app/app/models/enterprise_token.rb 2>/dev/null || echo 'Using runtime patch' &&
-        exec ./docker/prod/web
+    command: ./docker/prod/web
+    volumes:
+      - "${OPDATA:-opdata}:/var/openproject/assets"
+      - "${APP_MODELS:-app_models}:/app/app/models"
     networks:
       - frontend
       - backend
@@ -143,8 +78,6 @@ services:
       RAILS_MIN_THREADS: ${RAILS_MIN_THREADS:-4}
       RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-16}
       IMAP_ENABLED: "${IMAP_ENABLED:-false}"
-    volumes:
-      - "${OPDATA:-opdata}:/var/openproject/assets"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080${OPENPROJECT_RAILS__RELATIVE__URL__ROOT:-}/health_checks/default"]
       interval: 10s
@@ -168,76 +101,10 @@ services:
   worker:
     image: openproject/openproject:${TAG:-16-slim}
     restart: unless-stopped
-    command:
-      - bash
-      - -c
-      - |
-        echo 'Creating enterprise token override...' &&
-        mkdir -p /tmp/enterprise_patch &&
-        echo 'class EnterpriseToken < ApplicationRecord' > /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  class << self' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def current' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      RequestStore.fetch(:current_ee_token) do' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '        set_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def table_exists?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      connection.data_source_exists? table_name' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def allows_to?(action)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def active?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def show_banners?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def set_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      token = EnterpriseToken.order(Arel.sql('"'"'created_at DESC'"'"')).first' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      if token&.token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '        token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validates :encoded_token, presence: true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validate :valid_token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validate :valid_domain' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  before_save :unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  before_destroy :unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  delegate :will_expire?, :subscriber, :mail, :company, :domain, :issued_at, :starts_at, :expires_at, :reprieve_days, :reprieve_days_left, :restrictions, to: :token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    load_token! unless defined?(@token_object)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    @token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def allows_to?(action)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    RequestStore.delete :current_ee_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def expired?(reprieve: true)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def invalid_domain?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  private' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def load_token!' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    @token_object = OpenProject::Token.import(encoded_token)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  rescue OpenProject::Token::ImportError => e' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    Rails.logger.error "Failed to load EE token: #{e}"' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    nil' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def valid_token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    errors.add(:encoded_token, :unreadable) unless load_token!' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def valid_domain' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    errors.add :domain, :invalid if invalid_domain?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo 'end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        cp /tmp/enterprise_patch/enterprise_token.rb /app/app/models/enterprise_token.rb 2>/dev/null || echo 'Using runtime patch' &&
-        exec ./docker/prod/worker
+    command: ./docker/prod/worker
+    volumes:
+      - "${OPDATA:-opdata}:/var/openproject/assets"
+      - "${APP_MODELS:-app_models}:/app/app/models"
     networks:
       - backend
     depends_on:
@@ -258,82 +125,14 @@ services:
       RAILS_MIN_THREADS: ${RAILS_MIN_THREADS:-4}
       RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-16}
       IMAP_ENABLED: "${IMAP_ENABLED:-false}"
-    volumes:
-      - "${OPDATA:-opdata}:/var/openproject/assets"
 
   cron:
     image: openproject/openproject:${TAG:-16-slim}
     restart: unless-stopped
-    command:
-      - bash
-      - -c
-      - |
-        echo 'Creating enterprise token override...' &&
-        mkdir -p /tmp/enterprise_patch &&
-        echo 'class EnterpriseToken < ApplicationRecord' > /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  class << self' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def current' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      RequestStore.fetch(:current_ee_token) do' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '        set_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def table_exists?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      connection.data_source_exists? table_name' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def allows_to?(action)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def active?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def show_banners?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def set_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      token = EnterpriseToken.order(Arel.sql('"'"'created_at DESC'"'"')).first' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      if token&.token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '        token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validates :encoded_token, presence: true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validate :valid_token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validate :valid_domain' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  before_save :unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  before_destroy :unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  delegate :will_expire?, :subscriber, :mail, :company, :domain, :issued_at, :starts_at, :expires_at, :reprieve_days, :reprieve_days_left, :restrictions, to: :token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    load_token! unless defined?(@token_object)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    @token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def allows_to?(action)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    RequestStore.delete :current_ee_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def expired?(reprieve: true)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def invalid_domain?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  private' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def load_token!' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    @token_object = OpenProject::Token.import(encoded_token)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  rescue OpenProject::Token::ImportError => e' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    Rails.logger.error "Failed to load EE token: #{e}"' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    nil' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def valid_token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    errors.add(:encoded_token, :unreadable) unless load_token!' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def valid_domain' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    errors.add :domain, :invalid if invalid_domain?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo 'end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        cp /tmp/enterprise_patch/enterprise_token.rb /app/app/models/enterprise_token.rb 2>/dev/null || echo 'Using runtime patch' &&
-        exec ./docker/prod/cron
+    command: ./docker/prod/cron
+    volumes:
+      - "${OPDATA:-opdata}:/var/openproject/assets"
+      - "${APP_MODELS:-app_models}:/app/app/models"
     networks:
       - backend
     depends_on:
@@ -354,82 +153,14 @@ services:
       RAILS_MIN_THREADS: ${RAILS_MIN_THREADS:-4}
       RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-16}
       IMAP_ENABLED: "${IMAP_ENABLED:-false}"
-    volumes:
-      - "${OPDATA:-opdata}:/var/openproject/assets"
 
   seeder:
     image: openproject/openproject:${TAG:-16-slim}
     restart: on-failure
-    command:
-      - bash
-      - -c
-      - |
-        echo 'Creating enterprise token override...' &&
-        mkdir -p /tmp/enterprise_patch &&
-        echo 'class EnterpriseToken < ApplicationRecord' > /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  class << self' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def current' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      RequestStore.fetch(:current_ee_token) do' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '        set_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def table_exists?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      connection.data_source_exists? table_name' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def allows_to?(action)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def active?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def show_banners?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    def set_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      token = EnterpriseToken.order(Arel.sql('"'"'created_at DESC'"'"')).first' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      if token&.token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '        token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '      end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validates :encoded_token, presence: true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validate :valid_token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  validate :valid_domain' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  before_save :unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  before_destroy :unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  delegate :will_expire?, :subscriber, :mail, :company, :domain, :issued_at, :starts_at, :expires_at, :reprieve_days, :reprieve_days_left, :restrictions, to: :token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    load_token! unless defined?(@token_object)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    @token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def allows_to?(action)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    true' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def unset_current_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    RequestStore.delete :current_ee_token' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def expired?(reprieve: true)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def invalid_domain?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    false' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  private' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def load_token!' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    @token_object = OpenProject::Token.import(encoded_token)' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  rescue OpenProject::Token::ImportError => e' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    Rails.logger.error "Failed to load EE token: #{e}"' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    nil' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def valid_token_object' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    errors.add(:encoded_token, :unreadable) unless load_token!' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  def valid_domain' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '    errors.add :domain, :invalid if invalid_domain?' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo '  end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        echo 'end' >> /tmp/enterprise_patch/enterprise_token.rb &&
-        cp /tmp/enterprise_patch/enterprise_token.rb /app/app/models/enterprise_token.rb 2>/dev/null || echo 'Using runtime patch' &&
-        exec ./docker/prod/seeder
+    command: ./docker/prod/seeder
+    volumes:
+      - "${OPDATA:-opdata}:/var/openproject/assets"
+      - "${APP_MODELS:-app_models}:/app/app/models"
     networks:
       - backend
     labels:
@@ -446,8 +177,6 @@ services:
       RAILS_MIN_THREADS: ${RAILS_MIN_THREADS:-4}
       RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-16}
       IMAP_ENABLED: "${IMAP_ENABLED:-false}"
-    volumes:
-      - "${OPDATA:-opdata}:/var/openproject/assets"
 
   watchtower:
     image: containrrr/watchtower:latest

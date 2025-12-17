@@ -1,10 +1,16 @@
+############ If you are using DOCKER all-in-one image, create Dockerfile like:         ################
+############ FROM openproject/openproject:16                                           ################
+############ COPY ./enterprise_token.rb app/models/enterprise_token.rb                 ################
+
+############ If you are runing a manual installation:                                  ################
 ############ REPLACE app/models/enterprise_token.rb in the source code with this file! ################
 ############ also be sure to RESTART OpenProject after replacing the file.             ################
-############ it doesn't show that enterprise mode is enabled in the settings, but all  ################
-############ enterprise mode features, such as KanBan boards, are enabled.             ################
-#-- copyright
+
+############ If using some other set up (eg docker-compose), read the comments on      ################
+############ https://gist.github.com/markasoftware/f5b2e55a2c2e3abb1f9eefcdf0bfff45    ################
+
 # OpenProject is an open source project management software.
-# Copyright (C) 2012-2023 the OpenProject GmbH
+# Copyright (C) the OpenProject GmbH
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License version 3.
@@ -31,17 +37,68 @@
 #++
 class EnterpriseToken < ApplicationRecord
   class << self
+    # On the backend, features are checked only using `allows_to?`, which we can hardcode to return `true`.
+    # On the frontend, however, it instead checks if particular strings are included in the `available_features`
+    # Unfortunately there is no canonical variable with all the features, so we have to hardcode.
+    # Use `rg --pcre2 -INo "(?<=allows_to\?[^:*]:|allowsTo\(')[a-z_]*" | sort -u` to generate this list:
+    TRUE_FEATURES = %i[
+      allowed_action
+      baseline_comparison
+      board_view
+      calculated_values
+      conditional_highlighting
+      custom_actions
+      custom_field_hierarchies
+      customize_life_cycle
+      date_alerts
+      define_custom_style
+      edit_attribute_groups
+      forbidden_action
+      gantt_pdf_export
+      internal_comments
+      ldap_groups
+      nextcloud_sso
+      one_drive_sharepoint_file_storage
+      placeholder_users
+      readonly_work_packages
+      scim_api
+      sso_auth_providers
+      team_planner_view
+      time_entry_time_restrictions
+      virus_scanning
+      work_package_query_relation_columns
+      work_package_sharing
+      work_package_subject_generation
+    ].freeze
+
+    # Not all the methods here are ever actually called outside the enterprise_token.rb file itself
+    # in upstream openproject, but I'll include all of them that can be reasonably implemented here,
+    # just in case openproject changes in the future to start using the extra methods.
     def current
-      RequestStore.fetch(:current_ee_token) do
-        set_current_token
-      end
+      self.new
     end
 
-    def table_exists?
-      connection.data_source_exists? table_name
+    def all_tokens
+      [self.new]
     end
 
-    def allows_to?(action)
+    def active_tokens
+      [self.new]
+    end
+
+    def active_non_trial_tokens
+      [self.new]
+    end
+
+    def active_trial_tokens
+      []
+    end
+
+    def active_trial_token
+      nil
+    end
+
+    def allows_to?(feature)
       true
     end
 
@@ -49,77 +106,258 @@ class EnterpriseToken < ApplicationRecord
       true
     end
 
+    def trial_only?
+      false
+    end
+
+    def available_features
+      TRUE_FEATURES
+    end
+
+    def non_trialling_features
+      TRUE_FEATURES
+    end
+
+    def trialling_features
+      []
+    end
+
+    def trialling?(feature)
+      false
+    end
+
+    def hide_banners?
+      true
+    end
+
     def show_banners?
       false
     end
 
-    def set_current_token
-      token = EnterpriseToken.order(Arel.sql('created_at DESC')).first
+    def user_limit
+      nil
+    end
 
-      if token&.token_object
-        token
-      end
+    def non_trial_user_limit
+      nil
+    end
+
+    def trial_user_limit
+      nil
+    end
+
+    def banner_type_for(feature:)
+      nil
+    end
+
+    def get_user_limit_of(tokens)
+      nil
     end
   end
 
-  validates :encoded_token, presence: true
-  validate :valid_token_object
-  validate :valid_domain
-
-  before_save :unset_current_token
-  before_destroy :unset_current_token
-
-  delegate :will_expire?,
-           :subscriber,
-           :mail,
-           :company,
-           :domain,
-           :issued_at,
-           :starts_at,
-           :expires_at,
-           :reprieve_days,
-           :reprieve_days_left,
-           :restrictions,
-           to: :token_object
+  FAR_FUTURE_DATE = Date.new(9999, 1, 1)
 
   def token_object
-    load_token! unless defined?(@token_object)
-    @token_object
+    Class.new do
+      def id
+        "lmao"
+      end
+
+      def has_feature?(feature)
+        true
+      end
+
+      def will_expire?
+        false
+      end
+
+      def mail
+        "admin@example.com"
+      end
+
+      def subscriber
+        "markasoftware-free-enterprise-mode"
+      end
+
+      def company
+        "markasoftware"
+      end
+
+      def domain
+        "markasoftware.com"
+      end
+
+      def issued_at
+        Time.zone.today - 1
+      end
+
+      def starts_at
+        Time.zone.today - 1
+      end
+
+      def expires_at
+        Time.zone.today + 1
+      end
+
+      def reprieve_days
+        nil
+      end
+
+      def reprieve_days_left
+        69
+      end
+
+      def restrictions
+        nil
+      end
+
+      def available_features
+        EnterpriseToken.TRUE_FEATURES
+      end
+
+      def plan
+        "markasoftware_free_enterprise_mode"
+      end
+
+      def features
+        EnterpriseToken.TRUE_FEATURES
+      end
+      
+      def version
+        69
+      end
+
+      def started?
+        true
+      end
+
+      def trial?
+        false
+      end
+
+      def active?
+        true
+      end
+    end.new
+  end
+
+  def id
+    "lmao"
+  end
+
+  def encoded_token
+    "oaml"
+  end
+
+  def will_expire?
+    false
+  end
+
+  def mail
+    "admin@example.com"
+  end
+
+  def subscriber
+    "markasoftware-free-enterprise-mode"
+  end
+
+  def company
+    "markasoftware"
+  end
+
+  def domain
+    "markasoftware.com"
+  end
+
+  def issued_at
+    Time.zone.today - 1
+  end
+
+  def starts_at
+    Time.zone.today - 1
+  end
+
+  def expires_at
+    Time.zone.today + 1
+  end
+
+  def reprieve_days
+    nil
+  end
+
+  def reprieve_days_left
+    69
+  end
+
+  def restrictions
+    nil
+  end
+
+  def available_features
+    EnterpriseToken.TRUE_FEATURES
+  end
+
+  def plan
+    "markasoftware_free_enterprise_mode"
+  end
+
+  def features
+    EnterpriseToken.TRUE_FEATURES
+  end
+  
+  def version
+    69
+  end
+
+  def started?
+    true
+  end
+
+  def trial?
+    false
+  end
+
+  def active?
+    true
   end
 
   def allows_to?(action)
     true
   end
 
-  def unset_current_token
-    # Clear current cache
-    RequestStore.delete :current_ee_token
+  def expiring_soon?
+    false
+  end
+
+  def in_grace_period?
+    false
   end
 
   def expired?(reprieve: true)
     false
   end
 
-  ##
-  # The domain is only validated for tokens from version 2.0 onwards.
+  def statuses
+    []
+  end
+
   def invalid_domain?
     false
   end
 
-  private
+  def unlimited_users?
+    true
+  end
 
-  def load_token!
-    @token_object = OpenProject::Token.import(encoded_token)
-  rescue OpenProject::Token::ImportError => e
-    Rails.logger.error "Failed to load EE token: #{e}"
+  def max_active_users
     nil
   end
 
-  def valid_token_object
-    errors.add(:encoded_token, :unreadable) unless load_token!
+  def sort_key
+    [FAR_FUTURE_DATE, FAR_FUTURE_DATE]
   end
 
-  def valid_domain
-    errors.add :domain, :invalid if invalid_domain?
+  def days_left
+    69
   end
 end

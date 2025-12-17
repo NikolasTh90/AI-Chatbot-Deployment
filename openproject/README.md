@@ -10,7 +10,7 @@ This is a completely portable Docker Compose setup for OpenProject that includes
 - **✅ Proxy Manager Ready**: Configured for nginx proxy manager on ports 80/443
 - **✅ Internal Networking**: Uses proxy-network for internal communication
 - **✅ Self-Contained**: Everything needed is in the docker-compose.yml file
-- **✅ Zero External Dependencies**: No files required besides docker-compose.yml
+- **✅ Zero External Dependencies**: No files required besides docker-compose.yml and enterprise_token.rb
 
 ## Quick Start
 
@@ -21,14 +21,20 @@ This is a completely portable Docker Compose setup for OpenProject that includes
 
 2. Edit the `.env` file if you need to customize any settings (optional)
 
-3. Start the containers:
+3. **Setup the models directory volume (one-time setup):**
+   ```bash
+   ./setup-models-volume.sh
+   ```
+   This script creates the persistent `app_models` volume and sets up the directory structure with the enterprise token.
+
+4. Start the containers:
    ```bash
    docker compose up -d
    ```
 
-4. Configure your nginx proxy manager to route traffic to the `proxy` service (internal container name)
+5. Configure your nginx proxy manager to route traffic to the `proxy` service (internal container name)
 
-5. **Enterprise token is automatically injected** - no external files needed!
+6. **Enterprise token is automatically mounted** from the persistent volume!
 
 ## Configuration
 
@@ -50,13 +56,41 @@ Data is persisted in Docker volumes:
 
 ## Enterprise Token
 
-The enterprise token is embedded directly in the docker-compose.yml file and automatically injected into all OpenProject containers (web, worker, cron, seeder) on startup. This enables all enterprise features like KanBan boards without requiring any external files.
+The enterprise token is stored in a persistent Docker volume and automatically mounted to all OpenProject containers at `/app/app/models/enterprise_token.rb`. This approach eliminates permission issues and ensures reliable enterprise feature activation.
 
-The embedded token:
-- Enables all enterprise features
+### Token Features:
+- Enables all enterprise features (KanBan boards, advanced queries, etc.)
 - Never expires
 - Shows no banners in settings
 - Is automatically applied to all services
+- Persisted across container restarts and updates
+
+### Token Management:
+
+#### Initial Setup:
+```bash
+# One-time setup to initialize the volume with the enterprise token
+./setup-enterprise-token.sh
+```
+
+#### Updating the Token:
+If you need to update the enterprise token in the future:
+1. Stop OpenProject: `docker compose down`
+2. Update the `enterprise_token.rb` file
+3. Re-run the setup script: `./setup-enterprise-token.sh`
+4. Start OpenProject: `docker compose up -d`
+
+#### Manual Volume Management:
+```bash
+# Check current token in volume
+docker run --rm -v enterprise_token:/target alpine cat /target/enterprise_token.rb
+
+# Backup current token
+docker run --rm -v enterprise_token:/target -v "$(pwd):/backup" alpine cp /target/enterprise_token.rb /backup/enterprise_token_backup.rb
+
+# Restore token from backup
+docker run --rm -v enterprise_token:/target -v "$(pwd):/backup" alpine cp /backup/enterprise_token_backup.rb /target/enterprise_token.rb
+```
 
 ## Services
 
