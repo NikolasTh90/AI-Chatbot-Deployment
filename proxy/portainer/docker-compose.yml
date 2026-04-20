@@ -1,27 +1,35 @@
-version: "3.9"
-
 services:
   portainer:
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ee:latest
     container_name: portainer
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     ports:
+      - "9443:9443"
       - "9000:9000"
-    environment:
-      - PUID=1000
-      - PGID=1000
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data:/data
+    networks:
+      - proxy
+    depends_on:
+      - portainer-agent
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "https://localhost:9443/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  portainer-agent:
+    image: portainer/agent:latest
+    container_name: portainer-agent
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+      - /:/host
     networks:
       - proxy
 
